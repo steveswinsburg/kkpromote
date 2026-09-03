@@ -37,7 +37,7 @@ function readFileOrThrow(file) {
 }
 
 // The kustomization image name is the fully qualified registry path, e.g.
-// "registry.example.com/hcd-search-api"; match on the trailing image name.
+// "registry.example.com/my-app"; match on the trailing image name.
 function imageMatches(name, application) {
   return typeof name === 'string' && (name === application || name.endsWith(`/${application}`));
 }
@@ -54,9 +54,30 @@ function findImage(doc, application, file) {
   throw new PromoteError(`no image entry for '${application}' found in ${file}`);
 }
 
-// yaml stringifies with LF; restore CRLF when the original file used it.
-function withLineEndings(output, original) {
-  return original.includes('\r\n') ? output.replace(/\n/g, '\r\n') : output;
+/** Keep the original quoting of a YAML scalar while swapping its value. */
+function renderScalar(previous, next) {
+  const value = `${next}`;
+  if (previous.length >= 2) {
+    const quote = previous[0];
+    if ((quote === '"' || quote === "'") && previous.endsWith(quote)) {
+      return quote === '"' ? JSON.stringify(value) : `'${value.replace(/'/g, "''")}'`;
+    }
+  }
+  return value;
+}
+
+/**
+ * Replace only the newTag scalar in the original file text, leaving indentation,
+ * comments, and the rest of the document unchanged.
+ */
+function withUpdatedTag(original, image, nextTag, file) {
+  const scalar = image.get('newTag', true);
+  if (!scalar || !Array.isArray(scalar.range)) {
+    throw new PromoteError(`no newTag value to update in ${file}`);
+  }
+  const [start, valueEnd] = scalar.range;
+  const previous = original.slice(start, valueEnd);
+  return original.slice(0, start) + renderScalar(previous, nextTag) + original.slice(valueEnd);
 }
 
 /**
@@ -162,9 +183,8 @@ export function promote({ path, application: applicationName, sourceEnv, targetE
     return result;
   }
 
-  targetImage.set('newTag', sourceTag);
   if (!dryRun) {
-    writeFileSync(targetFile, withLineEndings(targetDoc.toString(), targetRaw));
+    writeFileSync(targetFile, withUpdatedTag(targetRaw, targetImage, sourceTag, targetFile));
   }
   result.changed = true;
   return result;

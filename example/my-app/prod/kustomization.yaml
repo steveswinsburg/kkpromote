@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../base
+
+images:
+- name: registry.example.com/my-app
+  newName: registry.example.com/my-app
+  newTag: 0.9.0
+- name: registry.example.com/sidecar
+  newName: registry.example.com/sidecar
+  newTag: 9.9.9

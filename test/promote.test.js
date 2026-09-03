@@ -78,6 +78,53 @@ test('preserves comments when writing', () => {
   }
 });
 
+test('rewrites only the newTag value, keeping indent and the rest of the file', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'kip-'));
+  const path = join(repo, 'applications', 'my-app');
+  const original = (tag) => `kind: Kustomization
+resources:
+    - ../base
+images:
+    - name: ${REGISTRY}/my-app
+      newName: ${REGISTRY}/my-app
+      newTag: ${tag} # pinned by CI
+`;
+  try {
+    for (const [env, tag] of [['dev', '1.2.3'], ['sit', '1.0.0']]) {
+      mkdirSync(join(path, env), { recursive: true });
+      writeFileSync(kustomizationPath(path, env), original(tag));
+    }
+    promote({ path, sourceEnv: 'dev', targetEnv: 'sit' });
+    const raw = readFileSync(kustomizationPath(path, 'sit'), 'utf8');
+    assert.equal(raw, original('1.2.3'));
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('preserves quoting around newTag', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'kip-'));
+  const path = join(repo, 'applications', 'my-app');
+  try {
+    for (const [env, tag] of [['dev', '1.2.3'], ['sit', '1.0.0']]) {
+      mkdirSync(join(path, env), { recursive: true });
+      writeFileSync(
+        kustomizationPath(path, env),
+        `kind: Kustomization
+images:
+- name: ${REGISTRY}/my-app
+  newTag: "${tag}"
+`,
+      );
+    }
+    promote({ path, sourceEnv: 'dev', targetEnv: 'sit' });
+    const raw = readFileSync(kustomizationPath(path, 'sit'), 'utf8');
+    assert.match(raw, /newTag: "1\.2\.3"/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 test('is a no-op when the tags already match', () => {
   const path = makeApplication({ envs: { dev: '1.2.3', sit: '1.2.3' } });
   try {

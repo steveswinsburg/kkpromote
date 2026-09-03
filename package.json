@@ -1,6 +1,6 @@
 {
   "name": "kkpromote",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "A gitops tool to promote a container image tag for an application from one Kustomize environment overlay to another.",
   "type": "module",
   "bin": {

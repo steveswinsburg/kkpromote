@@ -111,3 +111,10 @@ promote({
 npm install
 npm test
 ```
+
+`example/` is a small GitOps fixture (not published to npm):
+
+```bash
+node bin/cli.js -n example my-app dev test
+node bin/cli.js example my-app dev test
+```
