@@ -1,7 +1,7 @@
 {
   "name": "kkpromote",
-  "version": "0.0.6",
-  "description": "A gitops tool to promote a container image tag for an application from one Kustomize environment overlay to another.",
+  "version": "1.0.0",
+  "description": "CLI for promoting container image tags between Kubernetes Kustomize overlays in GitOps repositories.",
   "type": "module",
   "bin": {
     "kkpromote": "bin/cli.js"
@@ -43,10 +43,17 @@
   },
   "keywords": [
     "kustomize",
+    "kustomize-overlay",
     "gitops",
     "kubernetes",
-    "image",
-    "promote"
+    "kubernetes-manifest",
+    "container-image",
+    "image-tag",
+    "deployment-promotion",
+    "environment-promotion",
+    "release-promotion",
+    "devops",
+    "cli"
   ],
   "dependencies": {
     "yaml": "^2.5.0"

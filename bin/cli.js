@@ -18,7 +18,7 @@ Arguments:
   target-env     environment subdirectory to copy the image tag TO
 
 Options:
-  -n, --dry-run       show the change without writing the file
+  -d, --dry-run       show the change without writing the file
   -h, --help          show this help
   -v, --version       show the version
 
@@ -40,7 +40,7 @@ function parseArgs(argv) {
       case '--version':
         options.version = true;
         break;
-      case '-n':
+      case '-d':
       case '--dry-run':
         options.dryRun = true;
         break;

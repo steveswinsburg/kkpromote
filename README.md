@@ -4,14 +4,12 @@
 
 # kkpromote
 
-A container image tag promoter for Gitops that works with Kubernetes and Kustomize, promoting an application from one Kustomize environment overlay to another.
+Promotes a container image tag for an application from one Kustomize environment
+overlay to another in a GitOps repository.
 
 [![CI](https://github.com/steveswinsburg/kkpromote/actions/workflows/ci.yml/badge.svg)](https://github.com/steveswinsburg/kkpromote/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/kkpromote.svg)](https://www.npmjs.com/package/kkpromote)
 [![license](https://img.shields.io/github/license/steveswinsburg/kkpromote.svg)](LICENSE)
-
-Promotes a container image tag for an application from one Kustomize environment
-overlay to another in a GitOps repository.
 
 ### Relationship to kustomize
 
@@ -26,7 +24,7 @@ formatting in the edited file.
 
 ## How it works
 
-This tool reads the kustomization.yaml from the environment and updates the image tag.
+**kkpromote** reads the kustomization.yaml from the source environment and updates the image tag into the target environment.
 
 Let's assume your gitops repo is laid out like this:
 
@@ -40,10 +38,10 @@ my-app/
     └── kustomization.yaml
 ```
 
-When you run `kkpromote my-app dev test` from the directory that contains
-`my-app/`, it will copy the `newTag` of the `my-app` image from the source
-overlay (dev) into the target overlay (test). Path is optional: if omitted, the
-current directory is searched for the application.
+When you run `kkpromote my-app dev test` it will copy the `newTag` of the `my-app` image from the source
+overlay (dev) into the target overlay (test). 
+
+Path is optional: if omitted, the current directory is searched for the application to promote.
 
 ## Install
 
@@ -53,7 +51,7 @@ Global install:
 npm install -g kkpromote
 ```
 
-Or run without installing:
+Or run without installing via `npx`:
 
 ```bash
 npx kkpromote my-app dev sit
@@ -66,14 +64,13 @@ npx kkpromote ~/my-gitops-repo/ my-app dev sit
 kkpromote [path] <application> <source-env> <target-env> [options]
 ```
 
-`path` defaults to the current directory. The application is then found as a
-subdirectory of that path, or as overlays already in the current directory.
+`path` defaults to the current directory. The application is then found as a subdirectory of that path, or as overlays already in the current directory.
 
 | Option | Description |
 | --- | --- |
-| `-n, --dry-run` | Show the change without writing the file |
-| `-h, --help` | Show help |
-| `-v, --version` | Show the version |
+| `-d, --dry-run` | Simulate the change without changing anything |
+| `-h, --help` | View help |
+| `-v, --version` | Check the version |
 
 Examples:
 
@@ -110,11 +107,16 @@ promote({
 ```bash
 npm install
 npm test
+npm link
 ```
 
-`example/` is a small GitOps fixture (not published to npm):
+The `example/` directory has a small GitOps layout you can use to test:
 
 ```bash
-node bin/cli.js -n example my-app dev test
-node bin/cli.js example my-app dev test
+kkpromote --dry-run example my-app dev test
+kkpromote example my-app dev test
 ```
+
+---
+
+Made with ❤️ for GitOps nerds.
