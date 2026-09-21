@@ -1,6 +1,6 @@
 {
   "name": "kkpromote",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "CLI for promoting container image tags between Kubernetes Kustomize overlays in GitOps repositories.",
   "type": "module",
   "bin": {

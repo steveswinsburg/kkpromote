@@ -84,10 +84,12 @@ function main() {
     const result = promote({ ...promoteOpts, dryRun: options.dryRun });
     const prefix = `${result.application} (${promoteOpts.sourceEnv} -> ${promoteOpts.targetEnv})`;
     if (!result.changed) {
-      process.stdout.write(`${prefix} already at ${result.tag}, no change made\n`);
+      process.stdout.write(`${prefix}: ${promoteOpts.sourceEnv} == ${result.tag}, ${promoteOpts.targetEnv} == ${result.tag} (no change)\n`);
     } else {
       const suffix = options.dryRun ? ' (dry run, not written)' : '';
-      process.stdout.write(`${prefix}: ${result.previousTag} -> ${result.tag}${suffix}\n`);
+      process.stdout.write(
+        `${prefix}: ${promoteOpts.sourceEnv} == ${result.tag}, ${promoteOpts.targetEnv}: ${result.previousTag} -> ${result.tag}${suffix}\n`
+      );
     }
   } catch (err) {
     if (err instanceof PromoteError) {
