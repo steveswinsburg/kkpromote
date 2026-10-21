@@ -4,7 +4,14 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { promote, PromoteError, kustomizationPath, optionsFromArgs } from '../src/promote.js';
+import {
+  promote,
+  PromoteError,
+  kustomizationPath,
+  optionsFromArgs,
+  setImageTag,
+  setOptionsFromArgs,
+} from '../src/promote.js';
 
 const REGISTRY = 'registry.example.com';
 
@@ -300,4 +307,63 @@ test('optionsFromArgs accepts an explicit path and application', () => {
 test('optionsFromArgs rejects the wrong number of arguments', () => {
   assert.equal(optionsFromArgs(['dev']), null);
   assert.equal(optionsFromArgs(['a', 'b', 'c', 'd', 'e']), null);
+});
+
+test('setImageTag writes the tag on a single overlay', () => {
+  const path = makeApplication({ envs: { dev: '1.0.0' } });
+  try {
+    const result = setImageTag({ path, targetEnv: 'dev', tag: 'abc1234' });
+    assert.equal(result.changed, true);
+    assert.equal(result.tag, 'abc1234');
+    assert.equal(tagIn(path, 'dev'), 'abc1234');
+  } finally {
+    cleanup(path);
+  }
+});
+
+test('setImageTag matches an explicit image name', () => {
+  const path = makeApplication({ application: 'other-app', envs: { dev: '1.0.0' } });
+  try {
+    setImageTag({
+      path,
+      application: 'other-app',
+      targetEnv: 'dev',
+      tag: 'sha256dead',
+      imageName: `${REGISTRY}/other-app`,
+    });
+    assert.equal(tagIn(path, 'dev'), 'sha256dead');
+  } finally {
+    cleanup(path);
+  }
+});
+
+test('setOptionsFromArgs parses set command positionals', () => {
+  assert.deepEqual(setOptionsFromArgs(['dev', 'abc']), {
+    targetEnv: 'dev',
+    tag: 'abc',
+  });
+  assert.deepEqual(setOptionsFromArgs(['my-app', 'dev', 'abc']), {
+    application: 'my-app',
+    targetEnv: 'dev',
+    tag: 'abc',
+  });
+  assert.deepEqual(setOptionsFromArgs(['/workloads', 'my-app', 'dev', 'abc']), {
+    path: '/workloads',
+    application: 'my-app',
+    targetEnv: 'dev',
+    tag: 'abc',
+  });
+});
+
+test('setOptionsFromArgs treats a directory first arg as the path', () => {
+  const path = makeApplication({ envs: { dev: '1.0.0' } });
+  try {
+    assert.deepEqual(setOptionsFromArgs([path, 'dev', 'abc1234']), {
+      path,
+      targetEnv: 'dev',
+      tag: 'abc1234',
+    });
+  } finally {
+    cleanup(path);
+  }
 });

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2
+
+- Add `setImageTag()` API and `kkpromote set` for writing a tag to one overlay (CI deploy)
+- `set` positional arguments mirror `promote` (`path`, `application`, env names); uses `targetEnv` + `tag`
+- Optional `--image-name` for exact kustomize `images[].name` / `newName` matching
+
 ## 1.0.0
 
 - First stable release; CLI and `promote()` API are considered stable

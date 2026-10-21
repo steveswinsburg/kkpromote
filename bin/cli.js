@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 
-import { optionsFromArgs, promote, PromoteError } from '../src/promote.js';
+import {
+  optionsFromArgs,
+  promote,
+  PromoteError,
+  setImageTag,
+  setOptionsFromArgs,
+} from '../src/promote.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
@@ -24,11 +30,37 @@ Options:
 
 Examples:
   kkpromote my-app dev test
-  kkpromote ~/dev/my-gitops-repo/applications my-app dev sit`;
+  kkpromote ~/dev/my-gitops-repo/applications my-app dev sit
+
+Set a tag on one overlay (CI deploy):
+
+  kkpromote set <application> <target-env> <tag> [options]
+  kkpromote set <path> <application> <target-env> <tag> [options]
+
+Options (set):
+  --image-name <name>   match exact kustomize images[].name or newName`;
+
+const SET_USAGE = `kkpromote set - write an image tag to one Kustomize overlay
+
+Usage:
+  kkpromote set <target-env> <tag> [options]
+  kkpromote set <application> <target-env> <tag> [options]
+  kkpromote set <path> <application> <target-env> <tag> [options]
+
+Arguments:
+  path           directory to search for the application (default: current directory)
+  application    application name (directory and image name to match)
+  target-env     environment subdirectory to write the image tag TO
+  tag            immutable tag to write (e.g. git SHA)
+
+Options:
+  --image-name <name>   exact images[].name (or newName) to match
+  -d, --dry-run         show the change without writing the file
+  -h, --help            show this help`;
 
 function parseArgs(argv) {
   const positionals = [];
-  const options = { dryRun: false };
+  const options = { dryRun: false, imageName: '' };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     switch (arg) {
@@ -43,6 +75,12 @@ function parseArgs(argv) {
       case '-d':
       case '--dry-run':
         options.dryRun = true;
+        break;
+      case '--image-name':
+        options.imageName = argv[++i] ?? '';
+        if (options.imageName === '') {
+          throw new PromoteError('--image-name requires a value');
+        }
         break;
       default:
         if (arg.startsWith('-')) throw new PromoteError(`unknown option: ${arg}`);
@@ -65,12 +103,45 @@ function main() {
   }
   const { positionals, options } = parsed;
 
-  if (options.help) {
-    process.stdout.write(`${USAGE}\n`);
-    return;
-  }
   if (options.version) {
     process.stdout.write(`${pkg.version}\n`);
+    return;
+  }
+
+  const command = positionals[0];
+  const rest = command === 'set' ? positionals.slice(1) : positionals;
+
+  if (options.help) {
+    process.stdout.write(`${command === 'set' ? SET_USAGE : USAGE}\n`);
+    return;
+  }
+
+  if (command === 'set') {
+    const setOpts = setOptionsFromArgs(rest);
+    if (!setOpts) {
+      process.stderr.write(`${SET_USAGE}\n`);
+      process.exit(2);
+    }
+    try {
+      const result = setImageTag({
+        ...setOpts,
+        imageName: options.imageName || undefined,
+        dryRun: options.dryRun,
+      });
+      const prefix = `${result.application} (${result.targetEnv})`;
+      if (!result.changed) {
+        process.stdout.write(`${prefix} already at ${result.tag}, no change made\n`);
+      } else {
+        const suffix = options.dryRun ? ' (dry run, not written)' : '';
+        process.stdout.write(`${prefix}: ${result.previousTag} -> ${result.tag}${suffix}\n`);
+      }
+    } catch (err) {
+      if (err instanceof PromoteError) {
+        process.stderr.write(`error: ${err.message}\n`);
+        process.exit(1);
+      }
+      throw err;
+    }
     return;
   }
 

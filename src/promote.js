@@ -42,16 +42,28 @@ function imageMatches(name, application) {
   return typeof name === 'string' && (name === application || name.endsWith(`/${application}`));
 }
 
-function findImage(doc, application, file) {
+function findImage(doc, application, file, imageName) {
   const images = doc.get('images');
   if (images && Array.isArray(images.items)) {
     for (const item of images.items) {
-      if (typeof item?.get === 'function' && imageMatches(item.get('name'), application)) {
+      if (typeof item?.get !== 'function') {
+        continue;
+      }
+      const name = item.get('name');
+      const newName = item.get('newName');
+      if (imageName) {
+        if (name === imageName || newName === imageName) {
+          return item;
+        }
+        continue;
+      }
+      if (imageMatches(name, application)) {
         return item;
       }
     }
   }
-  throw new PromoteError(`no image entry for '${application}' found in ${file}`);
+  const label = imageName ?? application;
+  throw new PromoteError(`no image entry for '${label}' found in ${file}`);
 }
 
 /** Keep the original quoting of a YAML scalar while swapping its value. */
@@ -188,4 +200,86 @@ export function promote({ path, application: applicationName, sourceEnv, targetE
   }
   result.changed = true;
   return result;
+}
+
+/**
+ * Set an application's image tag on a single environment overlay (CI deploy path).
+ *
+ * @param {object} options
+ * @param {string} [options.path] parent directory or application overlay directory
+ * @param {string} [options.application] application / image name to match
+ * @param {string} options.targetEnv environment subdirectory to update (same name as promote)
+ * @param {string} options.tag immutable tag to write (e.g. git SHA)
+ * @param {string} [options.imageName] exact kustomize images[].name (or newName) to match
+ * @param {boolean} [options.dryRun] when true, compute the change without writing
+ * @returns {{changed: boolean, application: string, targetEnv: string, tag: string,
+ *   previousTag: string, targetFile: string}}
+ */
+export function setImageTag({
+  path,
+  application: applicationName,
+  targetEnv,
+  tag,
+  imageName,
+  dryRun = false,
+}) {
+  if (tag == null || `${tag}`.trim() === '') {
+    throw new PromoteError('tag is required');
+  }
+
+  const resolved = resolveAppPath(path, applicationName, targetEnv);
+  const application = resolved.application;
+  const targetFile = kustomizationPath(resolved.path, targetEnv);
+
+  const targetRaw = readFileOrThrow(targetFile);
+  const targetDoc = parseDocument(targetRaw);
+  const targetImage = findImage(targetDoc, application, targetFile, imageName);
+  const previousTag = targetImage.get('newTag');
+
+  const result = {
+    changed: false,
+    application,
+    targetEnv,
+    tag,
+    previousTag,
+    targetFile,
+  };
+  if (`${previousTag}` === `${tag}`) {
+    return result;
+  }
+
+  if (!dryRun) {
+    writeFileSync(targetFile, withUpdatedTag(targetRaw, targetImage, tag, targetFile));
+  }
+  result.changed = true;
+  return result;
+}
+
+/**
+ * CLI positionals for `kkpromote set` (mirrors {@link optionsFromArgs} shape).
+ *
+ * 2 args: `<target-env> <tag>` (current directory is the app)
+ * 3 args: `<path-or-application> <target-env> <tag>`
+ * 4 args: `<path> <application> <target-env> <tag>`
+ *
+ * @param {string[]} positionals
+ * @returns {{path?: string, application?: string, targetEnv: string, tag: string} | null}
+ */
+export function setOptionsFromArgs(positionals) {
+  if (positionals.length === 2) {
+    const [targetEnv, tag] = positionals;
+    return { targetEnv, tag };
+  }
+  if (positionals.length === 3) {
+    const [first, targetEnv, tag] = positionals;
+    if (isDirectory(first)) {
+      return { path: first, targetEnv, tag };
+    }
+    return { application: first, targetEnv, tag };
+  }
+  if (positionals.length === 4) {
+    const [path, application, targetEnv, tag] = positionals;
+    return { path, application, targetEnv, tag };
+  }
+  return null;
 }
