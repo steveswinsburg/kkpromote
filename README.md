@@ -89,8 +89,8 @@ kkpromote ~/my-gitops-repo my-app dev sit
 
 ```bash
 kkpromote set my-app dev abc1234
-kkpromote set gitops/workloads reference-service dev abc1234
-kkpromote set gitops/workloads reference-service dev abc1234 --image-name ghcr.io/usechippy/reference-service
+kkpromote set gitops/workloads payments-api dev abc1234
+kkpromote set gitops/workloads payments-api dev abc1234 --image-name ghcr.io/acme/payments-api
 ```
 
 Same positional rules as promote: optional `path`, then `application`, then environment names — here
@@ -128,10 +128,10 @@ import { setImageTag } from 'kkpromote';
 
 setImageTag({
   path: 'gitops/workloads',
-  application: 'reference-service',
+  application: 'payments-api',
   targetEnv: 'dev',
   tag: 'abc1234',
-  imageName: 'ghcr.io/usechippy/reference-service',
+  imageName: 'ghcr.io/acme/payments-api',
 });
 ```
 
