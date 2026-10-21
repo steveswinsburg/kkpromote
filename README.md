@@ -82,6 +82,28 @@ kkpromote ~/my-gitops-repo my-app dev sit
 # using a path
 ```
 
+### Set a tag on one overlay (CI deploy)
+
+`promote` copies a tag **from** one overlay **to** another. Continuous deploy (build → gitops) needs to
+**write a new tag** (usually a git SHA) onto a single overlay without a source environment.
+
+```bash
+kkpromote set --target-env dev --tag abc1234
+
+kkpromote set --path gitops/workloads --application payments-api \
+  --target-env dev --tag abc1234 \
+  --image-name ghcr.io/acme/payments-api
+```
+
+`set` uses **named flags** (same fields as the `setImageTag()` API). `promote` keeps positional args for quick env-to-env copies.
+
+| Option | Description |
+| --- | --- |
+| `--image-name` | Match exact `images[].name` or `newName` (default: match on application directory name) |
+| `-d, --dry-run` | Simulate the change without writing |
+
+The overlay must already define `images[].newTag` for the target image (same requirement as promote).
+
 ## Programmatic use
 
 ```js
@@ -99,6 +121,18 @@ promote({
   application: 'my-app',
   sourceEnv: 'dev',
   targetEnv: 'sit',
+});
+```
+
+```js
+import { setImageTag } from 'kkpromote';
+
+setImageTag({
+  path: 'gitops/workloads',
+  application: 'payments-api',
+  targetEnv: 'dev',
+  tag: 'abc1234',
+  imageName: 'ghcr.io/acme/payments-api',
 });
 ```
 

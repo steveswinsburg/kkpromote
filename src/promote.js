@@ -42,16 +42,28 @@ function imageMatches(name, application) {
   return typeof name === 'string' && (name === application || name.endsWith(`/${application}`));
 }
 
-function findImage(doc, application, file) {
+function findImage(doc, application, file, imageName) {
   const images = doc.get('images');
   if (images && Array.isArray(images.items)) {
     for (const item of images.items) {
-      if (typeof item?.get === 'function' && imageMatches(item.get('name'), application)) {
+      if (typeof item?.get !== 'function') {
+        continue;
+      }
+      const name = item.get('name');
+      const newName = item.get('newName');
+      if (imageName) {
+        if (name === imageName || newName === imageName) {
+          return item;
+        }
+        continue;
+      }
+      if (imageMatches(name, application)) {
         return item;
       }
     }
   }
-  throw new PromoteError(`no image entry for '${application}' found in ${file}`);
+  const label = imageName ?? application;
+  throw new PromoteError(`no image entry for '${label}' found in ${file}`);
 }
 
 /** Keep the original quoting of a YAML scalar while swapping its value. */
@@ -188,4 +200,127 @@ export function promote({ path, application: applicationName, sourceEnv, targetE
   }
   result.changed = true;
   return result;
+}
+
+/**
+ * Set an application's image tag on a single environment overlay (CI deploy path).
+ *
+ * @param {object} options
+ * @param {string} [options.path] parent directory or application overlay directory
+ * @param {string} [options.application] application / image name to match
+ * @param {string} options.targetEnv environment subdirectory to update (same name as promote)
+ * @param {string} options.tag immutable tag to write (e.g. git SHA)
+ * @param {string} [options.imageName] exact kustomize images[].name (or newName) to match
+ * @param {boolean} [options.dryRun] when true, compute the change without writing
+ * @returns {{changed: boolean, application: string, targetEnv: string, tag: string,
+ *   previousTag: string, targetFile: string}}
+ */
+export function setImageTag({
+  path,
+  application: applicationName,
+  targetEnv,
+  tag,
+  imageName,
+  dryRun = false,
+}) {
+  if (tag == null || `${tag}`.trim() === '') {
+    throw new PromoteError('tag is required');
+  }
+
+  const resolved = resolveAppPath(path, applicationName, targetEnv);
+  const application = resolved.application;
+  const targetFile = kustomizationPath(resolved.path, targetEnv);
+
+  const targetRaw = readFileOrThrow(targetFile);
+  const targetDoc = parseDocument(targetRaw);
+  const targetImage = findImage(targetDoc, application, targetFile, imageName);
+  const previousTag = targetImage.get('newTag');
+
+  const result = {
+    changed: false,
+    application,
+    targetEnv,
+    tag,
+    previousTag,
+    targetFile,
+  };
+  if (`${previousTag}` === `${tag}`) {
+    return result;
+  }
+
+  if (!dryRun) {
+    writeFileSync(targetFile, withUpdatedTag(targetRaw, targetImage, tag, targetFile));
+  }
+  result.changed = true;
+  return result;
+}
+
+/**
+ * Parse `kkpromote set` argv (named flags only — same fields as {@link setImageTag}).
+ *
+ * Required: `--target-env`, `--tag`
+ * Optional: `--path`, `--application` / `--app`, `--image-name`, `--dry-run`
+ *
+ * @param {string[]} argv tokens after `set`
+ * @returns {{path?: string, application?: string, targetEnv: string, tag: string,
+ *   imageName?: string, dryRun: boolean}}
+ */
+export function parseSetCliArgs(argv) {
+  const out = { dryRun: false };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    switch (arg) {
+      case '-h':
+      case '--help':
+        out.help = true;
+        break;
+      case '-d':
+      case '--dry-run':
+        out.dryRun = true;
+        break;
+      case '--path':
+        out.path = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      case '--application':
+      case '--app':
+        out.application = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      case '--target-env':
+        out.targetEnv = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      case '--tag':
+        out.tag = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      case '--image-name':
+        out.imageName = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      default:
+        if (arg.startsWith('-')) {
+          throw new PromoteError(`unknown option: ${arg}`);
+        }
+        throw new PromoteError(
+          `unexpected argument '${arg}' — kkpromote set uses named flags only (see --help)`,
+        );
+    }
+  }
+  if (out.help) {
+    return out;
+  }
+  if (!out.targetEnv || !out.tag) {
+    throw new PromoteError('--target-env and --tag are required');
+  }
+  return out;
+}
+
+function readFlagValue(argv, index, flag) {
+  const value = argv[index + 1];
+  if (value == null || value === '' || value.startsWith('-')) {
+    throw new PromoteError(`${flag} requires a value`);
+  }
+  return value;
 }

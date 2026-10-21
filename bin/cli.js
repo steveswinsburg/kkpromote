@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 
-import { optionsFromArgs, promote, PromoteError } from '../src/promote.js';
+import {
+  optionsFromArgs,
+  parseSetCliArgs,
+  promote,
+  PromoteError,
+  setImageTag,
+} from '../src/promote.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
@@ -24,11 +30,33 @@ Options:
 
 Examples:
   kkpromote my-app dev test
-  kkpromote ~/dev/my-gitops-repo/applications my-app dev sit`;
+  kkpromote ~/dev/my-gitops-repo/applications my-app dev sit
+
+Set a tag on one overlay (CI deploy) — use kkpromote set --help`;
+
+const SET_USAGE = `kkpromote set - write an image tag to one Kustomize overlay
+
+Usage:
+  kkpromote set --target-env <env> --tag <tag> [options]
+
+Required:
+  --target-env <env>    environment subdirectory to write the image tag TO
+  --tag <tag>           immutable tag to write (e.g. git SHA)
+
+Optional:
+  --path <dir>          parent directory containing <application>/ (default: cwd)
+  --application, --app  application directory / image name to match
+  --image-name <name>   exact images[].name (or newName) to match
+  -d, --dry-run         show the change without writing the file
+  -h, --help            show this help
+
+Example:
+  kkpromote set --path gitops/workloads --application payments-api \\
+    --target-env dev --tag abc1234 --image-name ghcr.io/acme/payments-api`;
 
 function parseArgs(argv) {
   const positionals = [];
-  const options = { dryRun: false };
+  const options = { dryRun: false, imageName: '' };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     switch (arg) {
@@ -44,6 +72,12 @@ function parseArgs(argv) {
       case '--dry-run':
         options.dryRun = true;
         break;
+      case '--image-name':
+        options.imageName = argv[++i] ?? '';
+        if (options.imageName === '') {
+          throw new PromoteError('--image-name requires a value');
+        }
+        break;
       default:
         if (arg.startsWith('-')) throw new PromoteError(`unknown option: ${arg}`);
         positionals.push(arg);
@@ -53,9 +87,57 @@ function parseArgs(argv) {
 }
 
 function main() {
+  const argv = process.argv.slice(2);
+  if (argv.includes('-v') || argv.includes('--version')) {
+    process.stdout.write(`${pkg.version}\n`);
+    return;
+  }
+
+  const command = argv[0];
+  if (command === 'set') {
+    let setParsed;
+    try {
+      setParsed = parseSetCliArgs(argv.slice(1));
+    } catch (err) {
+      if (err instanceof PromoteError) {
+        process.stderr.write(`error: ${err.message}\n`);
+        process.exit(err.message.includes('required') || err.message.includes('unexpected') ? 2 : 1);
+      }
+      throw err;
+    }
+    if (setParsed.help) {
+      process.stdout.write(`${SET_USAGE}\n`);
+      return;
+    }
+    try {
+      const result = setImageTag({
+        path: setParsed.path,
+        application: setParsed.application,
+        targetEnv: setParsed.targetEnv,
+        tag: setParsed.tag,
+        imageName: setParsed.imageName,
+        dryRun: setParsed.dryRun,
+      });
+      const prefix = `${result.application} (${result.targetEnv})`;
+      if (!result.changed) {
+        process.stdout.write(`${prefix} already at ${result.tag}, no change made\n`);
+      } else {
+        const suffix = setParsed.dryRun ? ' (dry run, not written)' : '';
+        process.stdout.write(`${prefix}: ${result.previousTag} -> ${result.tag}${suffix}\n`);
+      }
+    } catch (err) {
+      if (err instanceof PromoteError) {
+        process.stderr.write(`error: ${err.message}\n`);
+        process.exit(1);
+      }
+      throw err;
+    }
+    return;
+  }
+
   let parsed;
   try {
-    parsed = parseArgs(process.argv.slice(2));
+    parsed = parseArgs(argv);
   } catch (err) {
     if (err instanceof PromoteError) {
       process.stderr.write(`error: ${err.message}\n`);
@@ -67,10 +149,6 @@ function main() {
 
   if (options.help) {
     process.stdout.write(`${USAGE}\n`);
-    return;
-  }
-  if (options.version) {
-    process.stdout.write(`${pkg.version}\n`);
     return;
   }
 
