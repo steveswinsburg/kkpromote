@@ -47,7 +47,13 @@ jobs:
           if [ "$published" = "$version" ]; then
             echo "kkpromote@${version} is already on npm, skipping publish"
           else
-            npm publish
+            npm_latest="$(npm view kkpromote version 2>/dev/null || echo '0.0.0')"
+            if [ "$version" != "$npm_latest" ] && [ "$(printf '%s\n%s' "$version" "$npm_latest" | sort -V | head -1)" = "$version" ]; then
+              echo "Publishing kkpromote@${version} with dist-tag release-${version} (npm latest is ${npm_latest})"
+              npm publish --tag "release-${version}"
+            else
+              npm publish
+            fi
           fi
       - name: Create GitHub Release
         env:
