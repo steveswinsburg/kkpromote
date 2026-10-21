@@ -88,13 +88,14 @@ kkpromote ~/my-gitops-repo my-app dev sit
 **write a new tag** (usually a git SHA) onto a single overlay without a source environment.
 
 ```bash
-kkpromote set my-app dev abc1234
-kkpromote set gitops/workloads payments-api dev abc1234
-kkpromote set gitops/workloads payments-api dev abc1234 --image-name ghcr.io/acme/payments-api
+kkpromote set --target-env dev --tag abc1234
+
+kkpromote set --path gitops/workloads --application payments-api \
+  --target-env dev --tag abc1234 \
+  --image-name ghcr.io/acme/payments-api
 ```
 
-Same positional rules as promote: optional `path`, then `application`, then environment names — here
-`<target-env>` and `<tag>` instead of `<source-env>` `<target-env>`.
+`set` uses **named flags** (same fields as the `setImageTag()` API). `promote` keeps positional args for quick env-to-env copies.
 
 | Option | Description |
 | --- | --- |

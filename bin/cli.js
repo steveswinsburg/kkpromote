@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 
 import {
   optionsFromArgs,
+  parseSetCliArgs,
   promote,
   PromoteError,
   setImageTag,
-  setOptionsFromArgs,
 } from '../src/promote.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -32,31 +32,27 @@ Examples:
   kkpromote my-app dev test
   kkpromote ~/dev/my-gitops-repo/applications my-app dev sit
 
-Set a tag on one overlay (CI deploy):
-
-  kkpromote set <application> <target-env> <tag> [options]
-  kkpromote set <path> <application> <target-env> <tag> [options]
-
-Options (set):
-  --image-name <name>   match exact kustomize images[].name or newName`;
+Set a tag on one overlay (CI deploy) — use kkpromote set --help`;
 
 const SET_USAGE = `kkpromote set - write an image tag to one Kustomize overlay
 
 Usage:
-  kkpromote set <target-env> <tag> [options]
-  kkpromote set <application> <target-env> <tag> [options]
-  kkpromote set <path> <application> <target-env> <tag> [options]
+  kkpromote set --target-env <env> --tag <tag> [options]
 
-Arguments:
-  path           directory to search for the application (default: current directory)
-  application    application name (directory and image name to match)
-  target-env     environment subdirectory to write the image tag TO
-  tag            immutable tag to write (e.g. git SHA)
+Required:
+  --target-env <env>    environment subdirectory to write the image tag TO
+  --tag <tag>           immutable tag to write (e.g. git SHA)
 
-Options:
+Optional:
+  --path <dir>          parent directory containing <application>/ (default: cwd)
+  --application, --app  application directory / image name to match
   --image-name <name>   exact images[].name (or newName) to match
   -d, --dry-run         show the change without writing the file
-  -h, --help            show this help`;
+  -h, --help            show this help
+
+Example:
+  kkpromote set --path gitops/workloads --application payments-api \\
+    --target-env dev --tag abc1234 --image-name ghcr.io/acme/payments-api`;
 
 function parseArgs(argv) {
   const positionals = [];
@@ -91,48 +87,42 @@ function parseArgs(argv) {
 }
 
 function main() {
-  let parsed;
-  try {
-    parsed = parseArgs(process.argv.slice(2));
-  } catch (err) {
-    if (err instanceof PromoteError) {
-      process.stderr.write(`error: ${err.message}\n`);
-      process.exit(2);
-    }
-    throw err;
-  }
-  const { positionals, options } = parsed;
-
-  if (options.version) {
+  const argv = process.argv.slice(2);
+  if (argv.includes('-v') || argv.includes('--version')) {
     process.stdout.write(`${pkg.version}\n`);
     return;
   }
 
-  const command = positionals[0];
-  const rest = command === 'set' ? positionals.slice(1) : positionals;
-
-  if (options.help) {
-    process.stdout.write(`${command === 'set' ? SET_USAGE : USAGE}\n`);
-    return;
-  }
-
+  const command = argv[0];
   if (command === 'set') {
-    const setOpts = setOptionsFromArgs(rest);
-    if (!setOpts) {
-      process.stderr.write(`${SET_USAGE}\n`);
-      process.exit(2);
+    let setParsed;
+    try {
+      setParsed = parseSetCliArgs(argv.slice(1));
+    } catch (err) {
+      if (err instanceof PromoteError) {
+        process.stderr.write(`error: ${err.message}\n`);
+        process.exit(err.message.includes('required') || err.message.includes('unexpected') ? 2 : 1);
+      }
+      throw err;
+    }
+    if (setParsed.help) {
+      process.stdout.write(`${SET_USAGE}\n`);
+      return;
     }
     try {
       const result = setImageTag({
-        ...setOpts,
-        imageName: options.imageName || undefined,
-        dryRun: options.dryRun,
+        path: setParsed.path,
+        application: setParsed.application,
+        targetEnv: setParsed.targetEnv,
+        tag: setParsed.tag,
+        imageName: setParsed.imageName,
+        dryRun: setParsed.dryRun,
       });
       const prefix = `${result.application} (${result.targetEnv})`;
       if (!result.changed) {
         process.stdout.write(`${prefix} already at ${result.tag}, no change made\n`);
       } else {
-        const suffix = options.dryRun ? ' (dry run, not written)' : '';
+        const suffix = setParsed.dryRun ? ' (dry run, not written)' : '';
         process.stdout.write(`${prefix}: ${result.previousTag} -> ${result.tag}${suffix}\n`);
       }
     } catch (err) {
@@ -142,6 +132,23 @@ function main() {
       }
       throw err;
     }
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = parseArgs(argv);
+  } catch (err) {
+    if (err instanceof PromoteError) {
+      process.stderr.write(`error: ${err.message}\n`);
+      process.exit(2);
+    }
+    throw err;
+  }
+  const { positionals, options } = parsed;
+
+  if (options.help) {
+    process.stdout.write(`${USAGE}\n`);
     return;
   }
 

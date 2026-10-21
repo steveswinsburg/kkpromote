@@ -256,30 +256,71 @@ export function setImageTag({
 }
 
 /**
- * CLI positionals for `kkpromote set` (mirrors {@link optionsFromArgs} shape).
+ * Parse `kkpromote set` argv (named flags only — same fields as {@link setImageTag}).
  *
- * 2 args: `<target-env> <tag>` (current directory is the app)
- * 3 args: `<path-or-application> <target-env> <tag>`
- * 4 args: `<path> <application> <target-env> <tag>`
+ * Required: `--target-env`, `--tag`
+ * Optional: `--path`, `--application` / `--app`, `--image-name`, `--dry-run`
  *
- * @param {string[]} positionals
- * @returns {{path?: string, application?: string, targetEnv: string, tag: string} | null}
+ * @param {string[]} argv tokens after `set`
+ * @returns {{path?: string, application?: string, targetEnv: string, tag: string,
+ *   imageName?: string, dryRun: boolean}}
  */
-export function setOptionsFromArgs(positionals) {
-  if (positionals.length === 2) {
-    const [targetEnv, tag] = positionals;
-    return { targetEnv, tag };
-  }
-  if (positionals.length === 3) {
-    const [first, targetEnv, tag] = positionals;
-    if (isDirectory(first)) {
-      return { path: first, targetEnv, tag };
+export function parseSetCliArgs(argv) {
+  const out = { dryRun: false };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    switch (arg) {
+      case '-h':
+      case '--help':
+        out.help = true;
+        break;
+      case '-d':
+      case '--dry-run':
+        out.dryRun = true;
+        break;
+      case '--path':
+        out.path = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      case '--application':
+      case '--app':
+        out.application = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      case '--target-env':
+        out.targetEnv = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      case '--tag':
+        out.tag = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      case '--image-name':
+        out.imageName = readFlagValue(argv, i, arg);
+        i++;
+        break;
+      default:
+        if (arg.startsWith('-')) {
+          throw new PromoteError(`unknown option: ${arg}`);
+        }
+        throw new PromoteError(
+          `unexpected argument '${arg}' — kkpromote set uses named flags only (see --help)`,
+        );
     }
-    return { application: first, targetEnv, tag };
   }
-  if (positionals.length === 4) {
-    const [path, application, targetEnv, tag] = positionals;
-    return { path, application, targetEnv, tag };
+  if (out.help) {
+    return out;
   }
-  return null;
+  if (!out.targetEnv || !out.tag) {
+    throw new PromoteError('--target-env and --tag are required');
+  }
+  return out;
+}
+
+function readFlagValue(argv, index, flag) {
+  const value = argv[index + 1];
+  if (value == null || value === '' || value.startsWith('-')) {
+    throw new PromoteError(`${flag} requires a value`);
+  }
+  return value;
 }

@@ -10,7 +10,7 @@ import {
   kustomizationPath,
   optionsFromArgs,
   setImageTag,
-  setOptionsFromArgs,
+  parseSetCliArgs,
 } from '../src/promote.js';
 
 const REGISTRY = 'registry.example.com';
@@ -337,33 +337,42 @@ test('setImageTag matches an explicit image name', () => {
   }
 });
 
-test('setOptionsFromArgs parses set command positionals', () => {
-  assert.deepEqual(setOptionsFromArgs(['dev', 'abc']), {
-    targetEnv: 'dev',
-    tag: 'abc',
-  });
-  assert.deepEqual(setOptionsFromArgs(['my-app', 'dev', 'abc']), {
-    application: 'my-app',
-    targetEnv: 'dev',
-    tag: 'abc',
-  });
-  assert.deepEqual(setOptionsFromArgs(['/workloads', 'my-app', 'dev', 'abc']), {
-    path: '/workloads',
-    application: 'my-app',
-    targetEnv: 'dev',
-    tag: 'abc',
-  });
+test('parseSetCliArgs parses named flags', () => {
+  assert.deepEqual(
+    parseSetCliArgs(['--target-env', 'dev', '--tag', 'abc']),
+    { dryRun: false, targetEnv: 'dev', tag: 'abc' },
+  );
+  assert.deepEqual(
+    parseSetCliArgs([
+      '--path',
+      '/workloads',
+      '--app',
+      'my-app',
+      '--target-env',
+      'dev',
+      '--tag',
+      'abc',
+      '--image-name',
+      'registry.example.com/my-app',
+    ]),
+    {
+      dryRun: false,
+      path: '/workloads',
+      application: 'my-app',
+      targetEnv: 'dev',
+      tag: 'abc',
+      imageName: 'registry.example.com/my-app',
+    },
+  );
 });
 
-test('setOptionsFromArgs treats a directory first arg as the path', () => {
-  const path = makeApplication({ envs: { dev: '1.0.0' } });
-  try {
-    assert.deepEqual(setOptionsFromArgs([path, 'dev', 'abc1234']), {
-      path,
-      targetEnv: 'dev',
-      tag: 'abc1234',
-    });
-  } finally {
-    cleanup(path);
-  }
+test('parseSetCliArgs rejects bare positionals', () => {
+  assert.throws(
+    () => parseSetCliArgs(['my-app', 'dev', 'abc']),
+    /named flags only/,
+  );
+});
+
+test('parseSetCliArgs requires target-env and tag', () => {
+  assert.throws(() => parseSetCliArgs(['--target-env', 'dev']), /--tag are required/);
 });
