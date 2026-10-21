@@ -1,10 +1,11 @@
 # Changelog
 
-## 1.0.2
+## 1.0.3
 
 - Add `setImageTag()` API and `kkpromote set` for writing a tag to one overlay (CI deploy)
 - **`kkpromote set` uses named flags only** (`--path`, `--application` / `--app`, `--target-env`, `--tag`, `--image-name`)
 - Optional `--image-name` for exact kustomize `images[].name` / `newName` matching
+- CI: publish with explicit dist-tag when semver is below npm `latest`
 
 ## 1.0.0
 
